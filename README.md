@@ -6,8 +6,15 @@ An autonomous indoor UAV exploration system built on **ROS 2 Jazzy** and **PX4 A
 
 ---
 
+## 👥 Team
+
+This project was developed collaboratively by Abed [Last Name] and [Friend's Name] under the supervision of **EMS Elektronik**.
+
+---
+
 ## 📋 Table of Contents
 
+- [Team](#-team)
 - [Overview & Motivation](#overview--motivation)
 - [System Architecture](#system-architecture)
 - [Coordinate Frame Transformation (NED ↔ ENU)](#coordinate-frame-transformation-ned--enu)
@@ -22,6 +29,7 @@ An autonomous indoor UAV exploration system built on **ROS 2 Jazzy** and **PX4 A
   - [4. Real-time Path Following & Safety Layer](#4-real-time-path-following--safety-layer)
 - [ROS 2 Interface & Topics](#ros-2-interface--topics)
 - [Estimated Hardware Budget](#estimated-hardware-budget)
+- [Credits](#-credits)
 - [License](#license)
 
 ---
@@ -255,6 +263,14 @@ While evaluated in high-fidelity Gazebo simulation, the physical hardware Bill o
 | **Power & Battery** | 2x 4S 5000mAh LiPo + PDB + Charger | $137.00 |
 | **Inspection Camera** | GoPro Hero10 Black | $150.00 |
 | **Total Hardware BOM** | | **~$2,046.99** |
+
+---
+
+## 👏 Credits
+
+Special thanks and attribution to the following open-source libraries and projects:
+- **[The Open Motion Planning Library (OMPL)](https://ompl.kavrakilab.org/)**: Used for 3D state space sampling and the BIT\* path planning algorithm implementation.
+- **[robot_exploration](https://github.com/ADVRHumanoids/robot_exploration)**: Adapted for 3D frontier extraction and exploration management logic.
 
 ---
 
