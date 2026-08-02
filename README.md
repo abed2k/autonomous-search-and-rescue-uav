@@ -14,7 +14,6 @@ This project was developed collaboratively by Abdul Karim (abed2k) and Hazem Abu
 
 ## Table of Contents
 
-- [Team](#-team)
 - [Overview & Motivation](#overview--motivation)
 - [System Architecture](#system-architecture)
 - [Coordinate Frame Transformation (NED ↔ ENU)](#coordinate-frame-transformation-ned--enu)
@@ -47,41 +46,25 @@ Search-and-rescue (SAR) missions in GPS-denied, structurally compromised indoor 
 
 ## System Architecture
 
-```
-                                  ┌───────────────────────────────┐
-                                  │      PX4 Autopilot SITL       │
-                                  │  (Offboard Trajectory Control)│
-                                  └───────────────▲───────────────┘
-                                                  │ /fmu/in/trajectory_setpoint
-                                                  │ /fmu/in/offboard_control_mode
-┌──────────────────────────────┐  /fmu/out/       │
-│    Gazebo Harmonic / SITL    │  vehicle_odometry│
-│  (X500 Quadcopter + 3D LiDAR)│─────────┐        │
-└──────────────┬───────────────┘         │        │
-               │ /lidar_3d/points        │        │
-               ▼                         ▼        │
-┌──────────────────────────────┐  ┌──────────────┴───────────────┐
-│     Micro XRCE-DDS Agent     │  │      drone_tf_publisher      │
-│  (PX4 ↔ ROS 2 Middleware)    │  │     (NED ↔ ENU Conversion)   │
-└──────────────┬───────────────┘  └──────────────┬───────────────┘
-               │                                 │ /tf (map ↔ base_link)
-               ▼                                 │
-┌──────────────────────────────┐                 │
-│        OctoMap Server        │◄────────────────┘
-│  (3D Probabilistic Voxel Grid)
-└──────────────┬───────────────┘
-               │ /octomap_full
-               ▼
-┌──────────────────────────────┐     /get_frontiers (SRV)
-│     Frontier Extraction      │◄─────────────────────────┐
-│   (3D Cluster Detection)     │                          │
-└──────────────────────────────┘                          │
-                                                          ▼
-┌──────────────────────────────┐  /planned_path ┌───────────────────┐
-│        Path Follower         │◄───────────────┤ Autonomous BIT*   │
-│ (Segment Safety Check @ 20Hz)│                │      Planner      │
-└──────────────────────────────┘                └───────────────────┘
-```
+Detailed flowchart of the system.
+![System Architecture Diagram](assets/sys.png)
+
+---
+
+## Operational Environment and Assmptions
+
+The autonomous UAV system is designed to operate in hazardous or inaccessible indoor
+environments. These environments are characterized by the absence of GNSS signals,
+limited space, cluttered geometry, and a high risk of collision.
+The following assumptions are made regarding the operational environment:
+- The environment is fully indoor and GPS-denied.
+- The environment is initially unknown to the UAV.
+- Obstacles are both static and dynamic during operation.
+- The environment may contain narrow corridors, sharp turns, and vertical structures.
+- The operation is performed in simulation for development and evaluation purposes.
+
+100mx100m indoor test environment.
+![Environment Image](assets/wrld.png)
 
 ---
 
@@ -224,6 +207,8 @@ $$\text{Utility} = N_i \times D_i \times (1 + \text{ratio}_{\text{unknown}})$$
 
 Where $N_i$ is the number of frontier points, $D_i$ is distance to the robot, and $\text{ratio}_{\text{unknown}}$ measures unknown volume within a 1.5m radius.
 
+![Frontier Exploration Image](assets/fe.png)
+
 ### 3. BIT\* Path Planning
 The **Batch Informed Trees (BIT\*)** algorithm plans collision-free trajectories:
 - **Batch Sampling**: Samples batch states within workspace bounds ($X \in [-9, 26]\text{m}$, $Y \in [-16, 17]\text{m}$, $Z \in [0.5, 5.5]\text{m}$).
@@ -246,6 +231,13 @@ The `path_follower` node streams `px4_msgs::msg::OffboardControlMode` and `px4_m
 - `/planned_path` (`nav_msgs/msg/Path`) - Computed 3D waypoints
 - `/fmu/in/offboard_control_mode` (`px4_msgs/msg/OffboardControlMode`) - Offboard enable flags
 - `/fmu/in/trajectory_setpoint` (`px4_msgs/msg/TrajectorySetpoint`) - Target position setpoints
+
+---
+
+## Exploration Demo
+
+5min simulation of the system inside the indoor test environment.
+![Exploration Demo GIF](assets/sim.gif)
 
 ---
 
