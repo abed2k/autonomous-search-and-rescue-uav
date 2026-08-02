@@ -1,6 +1,6 @@
 # 🚁 Autonomous Search and Rescue UAV
 
-An autonomous indoor UAV exploration system built on **ROS 2 Jazzy** and **PX4 Autopilot**. The quadrotor operates in GPS-denied, hazardous environments (e.g., collapsed structures, smoke-filled buildings) using 3D LiDAR perception to incrementally construct an **OctoMap**, detect 3D frontiers, and plan collision-free navigation paths using the **BIT\*** (Batch Informed Trees) algorithm via OMPL.
+An autonomous indoor UAV exploration system built on **ROS 2 Jazzy** and **PX4 Autopilot**. The quadrotor operates in GPS-denied, hazardous environments (e.g., collapsed structures, smoke-filled buildings) using 3D LiDAR perception to incrementally construct an **OctoMap**, detect 3D frontiers, and plan collision-free navigation paths using the **BIT\*** (Batch Informed Trees) algorithm via **OMPL**.
 
 > **Note on Naming:** While legacy code and parameter files inside `rrtstar_octomap_planner` reference `RRT*`, the underlying path planning logic is implemented using **BIT\*** for fast batch sampling, informed search, and asymptotic optimality.
 
@@ -8,7 +8,7 @@ An autonomous indoor UAV exploration system built on **ROS 2 Jazzy** and **PX4 A
 
 ## 👥 Team
 
-This project was developed collaboratively by Abed [Last Name] and [Friend's Name] under the supervision of **EMS Elektronik**.
+This project was developed collaboratively by Abdul Karim (abed2k) and Hazem Abusalem (hazem-a17) under the supervision of **EMS Elektronik**.
 
 ---
 
@@ -117,8 +117,9 @@ The `drone_tf_publisher` node continuously handles rigid-body frame transformati
 - **Autopilot**: PX4 Autopilot (v1.15+) with Offboard Control
 - **Simulator**: Gazebo Harmonic (`gz_x500_walls`)
 - **Bridge**: Micro XRCE-DDS Agent
-- **Planning Library**: OMPL (Open Motion Planning Library) v1.5+
-- **3D Mapping**: OctoMap 1.9+
+- **Planning Library (OMPL)**: [Open Motion Planning Library (OMPL)](https://ompl.kavrakilab.org/) v1.5+ (installed via system package `libompl-dev`). Used by `rrtstar_octomap_planner` for 3D state space sampling (`ompl::base::RealVectorStateSpace`), custom OctoMap collision checking (`ompl::base::StateValidityChecker`), and optimal path generation via `ompl::geometric::BITstar`.
+- **Frontier Exploration Framework**: Adapted from [ADVRHumanoids/robot_exploration](https://github.com/ADVRHumanoids/robot_exploration). Integrated into `src/robot_exploration` to provide 3D frontier extraction (`frontier_3d_extraction_node`), custom ROS 2 frontier services (`/get_frontiers`), and exploration management logic.
+- **3D Mapping**: OctoMap 1.9+ (`octomap_server`)
 
 ### Robot & Sensor Model (Simulation)
 - **Airframe**: X500 Quadcopter (`x500_lidar`)
