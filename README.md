@@ -215,6 +215,8 @@ The **Batch Informed Trees (BIT\*)** algorithm plans collision-free trajectories
 - **Informed Search & Pruning**: Constrains search inside an ellipsoid defined by current solution cost, rapidly refining paths.
 - **Safety Inflation**: Samples spherical clearance around voxels using $R_{\text{collision}} = 0.7\text{m} + \text{margin}_{\text{safety}} = 0.1\text{m}$.
 
+![BIT* Algorithm Comparison](assets/bit.png)
+
 ### 4. Real-time Path Following & Safety Layer
 The `path_follower` node streams `px4_msgs::msg::OffboardControlMode` and `px4_msgs::msg::TrajectorySetpoint` at 20 Hz. Before moving to the next waypoint, it performs a 15-step segment collision check against the live OctoMap, skipping or aborting unsafe paths dynamically.
 
