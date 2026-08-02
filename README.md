@@ -1,391 +1,264 @@
 # 🚁 Autonomous Search and Rescue UAV
 
-An autonomous indoor UAV exploration system built on **ROS 2 Jazzy** and **PX4 Autopilot**. The drone uses a 3D LiDAR sensor to build an OctoMap of its environment, extracts frontiers from the map, and plans collision-free paths using the BIT\* (Batch Informed Trees) algorithm — enabling fully autonomous indoor exploration for search and rescue scenarios.
+An autonomous indoor UAV exploration system built on **ROS 2 Jazzy** and **PX4 Autopilot**. The quadrotor operates in GPS-denied, hazardous environments (e.g., collapsed structures, smoke-filled buildings) using 3D LiDAR perception to incrementally construct an **OctoMap**, detect 3D frontiers, and plan collision-free navigation paths using the **BIT\*** (Batch Informed Trees) algorithm via OMPL.
+
+> **Note on Naming:** While legacy code and parameter files inside `rrtstar_octomap_planner` reference `RRT*`, the underlying path planning logic is implemented using **BIT\*** for fast batch sampling, informed search, and asymptotic optimality.
 
 ---
 
 ## 📋 Table of Contents
 
-- [Overview](#overview)
+- [Overview & Motivation](#overview--motivation)
 - [System Architecture](#system-architecture)
+- [Coordinate Frame Transformation (NED ↔ ENU)](#coordinate-frame-transformation-ned--enu)
 - [Packages](#packages)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Building](#building)
-- [Usage](#usage)
-  - [Simulation Setup](#1-simulation-setup)
-  - [Manual Navigation](#2-manual-navigation)
-  - [Autonomous Exploration](#3-autonomous-exploration)
-- [ROS 2 Topics](#ros-2-topics)
-- [Configuration](#configuration)
+- [Hardware & Software Specifications](#hardware--software-specifications)
+- [Installation & Build](#installation--build)
+- [Terminal Workflow & Execution](#terminal-workflow--execution)
 - [How It Works](#how-it-works)
-- [Results](#results)
+  - [1. 3D Occupancy Mapping](#1-3d-occupancy-mapping)
+  - [2. Frontier Extraction & Utility Ranking](#2-frontier-extraction--utility-ranking)
+  - [3. BIT\* Path Planning](#3-bit-path-planning)
+  - [4. Real-time Path Following & Safety Layer](#4-real-time-path-following--safety-layer)
+- [ROS 2 Interface & Topics](#ros-2-interface--topics)
+- [Estimated Hardware Budget](#estimated-hardware-budget)
 - [License](#license)
 
 ---
 
-## Overview
+## Overview & Motivation
 
-This project implements an end-to-end autonomous exploration pipeline for a PX4-based quadrotor (X500) equipped with a 3D LiDAR. The system is designed for GPS-denied indoor environments (e.g., collapsed buildings, warehouses) where a human operator cannot easily navigate.
-
-**Key capabilities:**
-- 🗺️ Real-time 3D occupancy mapping using OctoMap
-- 🔍 Frontier-based exploration to systematically cover unknown space
-- 🧭 Collision-free path planning with BIT\* (OMPL)
-- 🛡️ Safety layer with octomap-based collision checking on every path segment
-- 🎯 Autonomous goal selection with utility-based frontier ranking
-- 🕹️ Manual teleoperation and waypoint navigation modes
+Search-and-rescue (SAR) missions in GPS-denied, structurally compromised indoor spaces pose extreme dangers to human first responders. This project delivers a **fully autonomous UAV system** capable of:
+- Autonomous takeoff, 3D exploration, mapping, obstacle avoidance, and landing without human intervention.
+- Real-time 3D volumetric mapping using an onboard 3D LiDAR (Velodyne VLP-16 class sensor).
+- Systematic exploration of unknown spaces using frontier extraction and utility scoring.
+- Asymptotically optimal global path planning via BIT\* to navigate tight corridors and obstacles.
+- Closed-loop safety checking against dynamic OctoMap updates to prevent collisions.
 
 ---
 
 ## System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        PX4 SITL + Gazebo                        │
-│  ┌──────────┐    ┌──────────┐    ┌──────────────────────────┐   │
-│  │  X500     │    │  3D      │    │  PX4 Autopilot           │   │
-│  │  Drone    │───▶│  LiDAR   │    │  (Offboard Control)      │   │
-│  └──────────┘    └────┬─────┘    └──────────┬───────────────┘   │
-└───────────────────────┼─────────────────────┼───────────────────┘
-                        │                     │
-              ┌─────────▼─────────┐   ┌───────▼────────┐
-              │  Micro XRCE-DDS   │   │  Vehicle       │
-              │  Bridge           │   │  Odometry      │
-              └─────────┬─────────┘   └───────┬────────┘
-                        │                     │
-         ┌──────────────▼──────────────┐      │
-         │  OctoMap Server             │      │
-         │  (3D Occupancy Grid)        │      │
-         └──────────────┬──────────────┘      │
-                        │                     │
-              ┌─────────▼─────────┐   ┌───────▼────────┐
-              │  Frontier         │   │  Drone TF      │
-              │  Extraction       │   │  Publisher      │
-              └─────────┬─────────┘   │  (NED → ENU)   │
-                        │             └───────┬────────┘
-              ┌─────────▼─────────┐           │
-              │  Exploration      │           │
-              │  Manager          │           │
-              └─────────┬─────────┘           │
-                        │                     │
-              ┌─────────▼─────────────────────▼────────┐
-              │  Autonomous BIT* Planner               │
-              │  (Goal Selection + Path Planning)      │
-              └─────────┬─────────────────────────────┘
-                        │
-              ┌─────────▼─────────┐
-              │  Path Follower    │
-              │  (Safety Layer +  │
-              │   Waypoint Track) │
-              └───────────────────┘
+                                  ┌───────────────────────────────┐
+                                  │      PX4 Autopilot SITL       │
+                                  │  (Offboard Trajectory Control)│
+                                  └───────────────▲───────────────┘
+                                                  │ /fmu/in/trajectory_setpoint
+                                                  │ /fmu/in/offboard_control_mode
+┌──────────────────────────────┐  /fmu/out/       │
+│    Gazebo Harmonic / SITL    │  vehicle_odometry│
+│  (X500 Quadcopter + 3D LiDAR)│─────────┐        │
+└──────────────┬───────────────┘         │        │
+               │ /lidar_3d/points        │        │
+               ▼                         ▼        │
+┌──────────────────────────────┐  ┌──────────────┴───────────────┐
+│     Micro XRCE-DDS Agent     │  │      drone_tf_publisher      │
+│  (PX4 ↔ ROS 2 Middleware)    │  │     (NED ↔ ENU Conversion)   │
+└──────────────┬───────────────┘  └──────────────┬───────────────┘
+               │                                 │ /tf (map ↔ base_link)
+               ▼                                 │
+┌──────────────────────────────┐                 │
+│        OctoMap Server        │◄────────────────┘
+│  (3D Probabilistic Voxel Grid)
+└──────────────┬───────────────┘
+               │ /octomap_full
+               ▼
+┌──────────────────────────────┐     /get_frontiers (SRV)
+│     Frontier Extraction      │◄─────────────────────────┐
+│   (3D Cluster Detection)     │                          │
+└──────────────────────────────┘                          │
+                                                          ▼
+┌──────────────────────────────┐  /planned_path ┌───────────────────┐
+│        Path Follower         │◄───────────────┤ Autonomous BIT*   │
+│ (Segment Safety Check @ 20Hz)│                │      Planner      │
+└──────────────────────────────┘                └───────────────────┘
 ```
+
+---
+
+## Coordinate Frame Transformation (NED ↔ ENU)
+
+PX4 Autopilot operates natively in the **NED** (North-East-Down) coordinate frame, while ROS 2 uses **ENU** (East-North-Up).
+
+The `drone_tf_publisher` node continuously handles rigid-body frame transformations:
+- **Position**: $X_{\text{ENU}} = Y_{\text{NED}}$, $Y_{\text{ENU}} = X_{\text{NED}}$, $Z_{\text{ENU}} = -Z_{\text{NED}}$
+- **Orientation**: Quaternion $[w, x, y, z]_{\text{ENU}} = [q_0, q_1, -q_2, -q_3]_{\text{NED}}$
+- **TF Tree**: Broadcasts dynamic transform from `map` (parent) to `base_link` (child) and static transform from `base_link` to `lidar_3d`.
 
 ---
 
 ## Packages
 
-| Package | Language | Description |
-|---------|----------|-------------|
-| `rrtstar_octomap_planner` | C++ | BIT\* path planner with OctoMap collision checking. Contains both a manual planner node and an autonomous planner with frontier-based goal selection. |
-| `path_follower` | C++ | Waypoint tracking node that follows planned paths, with an OctoMap-based safety layer that validates every path segment before execution. |
-| `drone_tf_publisher` | Python | Publishes TF transforms from PX4 odometry (NED → ENU conversion) and static transforms for sensor frames. |
-| `px4_teleop_tools` | Python | Manual teleoperation (velocity control) and waypoint navigation tools for PX4 drones via Micro XRCE-DDS. |
-| `px4_msgs` | C++ | PX4 message definitions for ROS 2 communication. |
-| `robot_exploration` | C++/Python | Third-party frontier extraction and exploration management framework (adapted from [robot_exploration](https://github.com/ADVRHumanoids/robot_exploration)). |
+| Package | Language | Function |
+|---------|----------|----------|
+| `rrtstar_octomap_planner` | C++ / OMPL | Implements the **BIT\*** path planner and the `autonomous_planner_node` that computes exploration goals and plans optimal paths using OctoMap collision queries. |
+| `path_follower` | C++ | Low-latency control node executing planned paths by sending position setpoints to PX4 offboard mode while validating path segment safety against the live OctoMap at 20 Hz. |
+| `drone_tf_publisher` | Python | Listens to PX4 odometry, converts NED to ENU, and broadcasts `/tf` frames for mapping and visualization. |
+| `px4_teleop_tools` | Python | Manual teleoperation and structured waypoint flight scripts for testing and evaluation. |
+| `px4_msgs` | C++ / ROS 2 | PX4 uORB message definitions bridged via Micro XRCE-DDS. |
+| `robot_exploration` | C++ / Python | 3D frontier extraction service and exploration strategy management nodes. |
 
 ---
 
-## Prerequisites
+## Hardware & Software Specifications
 
-### Software
+### Software Stack
+- **OS**: Ubuntu 24.04 LTS
+- **Middleware**: ROS 2 Jazzy Jalisco
+- **Autopilot**: PX4 Autopilot (v1.15+) with Offboard Control
+- **Simulator**: Gazebo Harmonic (`gz_x500_walls`)
+- **Bridge**: Micro XRCE-DDS Agent
+- **Planning Library**: OMPL (Open Motion Planning Library) v1.5+
+- **3D Mapping**: OctoMap 1.9+
 
-- **Ubuntu 24.04**
-- **ROS 2 Jazzy** ([installation guide](https://docs.ros.org/en/jazzy/Installation.html))
-- **PX4 Autopilot** (v1.15+) with SITL support
-- **Gazebo Harmonic** (ships with ROS 2 Jazzy)
-- **Micro XRCE-DDS Agent** for PX4 ↔ ROS 2 communication
-
-### System Dependencies
-
-```bash
-# ROS 2 packages
-sudo apt install ros-jazzy-octomap ros-jazzy-octomap-msgs ros-jazzy-octomap-server \
-                 ros-jazzy-tf2-ros ros-jazzy-nav-msgs ros-jazzy-geometry-msgs \
-                 ros-jazzy-sensor-msgs ros-jazzy-visualization-msgs
-
-# OMPL (path planning library)
-sudo apt install libompl-dev
-
-# OctoMap development libraries
-sudo apt install liboctomap-dev
-
-# Micro XRCE-DDS Agent
-sudo snap install micro-xrce-dds-agent --edge
-```
+### Robot & Sensor Model (Simulation)
+- **Airframe**: X500 Quadcopter (`x500_lidar`)
+- **Primary Range Sensor**: 3D LiDAR (16-channel Velodyne VLP-16 specification: 360° horizontal, 30° vertical FOV, 50m range)
+- **Secondary Inspection Sensor**: Visual camera feed for situational awareness
 
 ---
 
-## Installation
-
-### 1. Clone the Repository
+## Installation & Build
 
 ```bash
-mkdir -p ~/uav_ws/src
-cd ~/uav_ws/src
-git clone https://github.com/<your-username>/autonomous-search-and-rescue-uav.git .
-```
+# 1. Install ROS 2 dependencies & OMPL
+sudo apt update && sudo apt install -y \
+  ros-jazzy-octomap ros-jazzy-octomap-msgs ros-jazzy-octomap-server \
+  ros-jazzy-tf2-ros ros-jazzy-nav-msgs ros-jazzy-geometry-msgs \
+  ros-jazzy-sensor-msgs ros-jazzy-visualization-msgs \
+  libompl-dev liboctomap-dev
 
-> **Note:** The `src/` directory of this repository is the ROS 2 workspace source folder. Clone accordingly.
-
-### 2. Install ROS 2 Dependencies
-
-```bash
-cd ~/uav_ws
-rosdep install --from-paths src --ignore-src -r -y
-```
-
-### 3. Set Up PX4 SITL
-
-```bash
-# Clone PX4 Autopilot (if not already installed)
-cd ~
-git clone https://github.com/PX4/PX4-Autopilot.git --recursive
-cd PX4-Autopilot
-bash Tools/setup/ubuntu.sh
-```
-
----
-
-## Building
-
-```bash
-cd ~/uav_ws
+# 2. Build the workspace
+cd ~/autonomous-search-and-rescue-uav
 source /opt/ros/jazzy/setup.bash
 colcon build --symlink-install
 source install/setup.bash
 ```
 
-> **Tip:** If you encounter OMPL-related build errors, ensure `libompl-dev` is installed and the include paths in `rrtstar_octomap_planner/CMakeLists.txt` match your system.
-
 ---
 
-## Usage
+## Terminal Workflow & Execution
 
-### 1. Simulation Setup
+Follow these step-by-step terminal steps to run the complete autonomous system:
 
-**Terminal 1 — Start PX4 SITL with Gazebo:**
-
+### Terminal 1: Launch PX4 SITL & Gazebo World
 ```bash
 cd ~/PX4-Autopilot
-make px4_sitl gz_x500_lidar
+export PX4_SIM_HOST_ADDR=127.0.0.1
+export PX4_MICRODDS_AGENT=udp://:8888
+make px4_sitl gz_x500_walls
 ```
 
-**Terminal 2 — Start Micro XRCE-DDS Agent:**
-
+### Terminal 2: Start Micro XRCE-DDS Agent
 ```bash
 micro-xrce-dds-agent udp4 -p 8888
 ```
 
-**Terminal 3 — Launch OctoMap Server:**
-
+### Terminal 3: Parameter Bridge for LiDAR & Clock
 ```bash
-source ~/uav_ws/install/setup.bash
-ros2 launch octomap_server octomap_server.launch.py \
-  remappings:="[('/cloud_in', '/lidar')]" \
-  params:="[{'resolution': 0.15, 'frame_id': 'map'}]"
+ros2 run ros_gz_bridge parameter_bridge \
+  /clock@rosgraph_msgs/msg/Clock@gz.msgs.Clock \
+  /lidar_3d/points/points@sensor_msgs/msg/PointCloud2@gz.msgs.PointCloudPacked
 ```
 
-**Terminal 4 — Launch TF Publisher:**
-
+### Terminal 4: Launch Drone TF Publisher
 ```bash
-source ~/uav_ws/install/setup.bash
+source ~/autonomous-search-and-rescue-uav/install/setup.bash
 ros2 launch drone_tf_publisher drone_tf_complete.launch.py
 ```
 
-### 2. Manual Navigation
-
-For teleoperation or manual waypoint navigation:
-
+### Terminal 5: Launch OctoMap Server
 ```bash
-# Teleoperation with keyboard
-ros2 run px4_teleop_tools microxrce_teleop
-
-# OR waypoint navigation (predefined waypoints)
-ros2 run px4_teleop_tools waypoint_navigator
+source ~/autonomous-search-and-rescue-uav/install/setup.bash
+ros2 run octomap_server octomap_server_node --ros-args \
+  -r /cloud_in:=/lidar_3d/points/points \
+  -p frame_id:=map \
+  -p base_frame_id:=base_link \
+  -p resolution:=0.15 \
+  -p sensor_model.max_range:=50.0 \
+  -p filter_ground_plane:=false
 ```
 
-For manual path planning (publish a goal, get a collision-free path):
-
+### Terminal 6: Launch Frontier Extraction
 ```bash
-# Start the planner
-ros2 run rrtstar_octomap_planner planner_node
-
-# Start the path follower
-ros2 run path_follower path_follower
-
-# Send a goal (ENU coordinates)
-ros2 topic pub --once /planner_goal geometry_msgs/msg/PointStamped \
-  "{header: {frame_id: 'map'}, point: {x: 10.0, y: 5.0, z: 2.0}}"
+source ~/autonomous-search-and-rescue-uav/install/setup.bash
+ros2 run frontier_extraction frontier_3d_extraction_node
 ```
 
-### 3. Autonomous Exploration
-
-Launch the full autonomous exploration stack:
-
+### Terminal 7: Launch Path Follower (Safety Layer & Execution)
 ```bash
-source ~/uav_ws/install/setup.bash
-ros2 launch rrtstar_octomap_planner autonomous_exploration.launch.py
-```
-
-This launches:
-- **Autonomous BIT\* Planner** — selects exploration goals from frontiers and plans paths
-- **Frontier Extraction Node** — detects frontier clusters in the 3D OctoMap
-- **Exploration Manager** — coordinates the exploration strategy
-
-In a separate terminal, start the path follower:
-
-```bash
+source ~/autonomous-search-and-rescue-uav/install/setup.bash
 ros2 run path_follower path_follower
 ```
 
-The drone will autonomously:
-1. Detect frontiers (boundaries between known-free and unknown space)
-2. Rank frontiers by a utility function (size × distance × unknown ratio)
-3. Plan a collision-free path to the best frontier using BIT\*
-4. Follow the path while continuously checking for obstacles
-5. Repeat until the environment is fully explored
+### Terminal 8: Launch Autonomous BIT\* Planner
+```bash
+source ~/autonomous-search-and-rescue-uav/install/setup.bash
+ros2 run rrtstar_octomap_planner autonomous_planner_node --ros-args \
+  -p autonomous_mode:=true
+```
 
----
-
-## ROS 2 Topics
-
-### Subscribed Topics
-
-| Topic | Type | Description |
-|-------|------|-------------|
-| `/fmu/out/vehicle_odometry` | `px4_msgs/VehicleOdometry` | Drone pose from PX4 (NED frame) |
-| `/octomap_full` | `octomap_msgs/Octomap` | Full 3D occupancy map |
-| `/planner_goal` | `geometry_msgs/PointStamped` | Manual goal input (ENU frame) |
-
-### Published Topics
-
-| Topic | Type | Description |
-|-------|------|-------------|
-| `/planned_path` | `nav_msgs/Path` | Collision-free path (ENU frame) |
-| `/fmu/in/trajectory_setpoint` | `px4_msgs/TrajectorySetpoint` | Position commands to PX4 |
-| `/fmu/in/offboard_control_mode` | `px4_msgs/OffboardControlMode` | Offboard mode configuration |
-
-### Service Clients
-
-| Service | Type | Description |
-|---------|------|-------------|
-| `/get_frontiers` | `frontier_extraction_srvs/GetFrontiers` | Requests frontier clusters from the frontier extraction node |
-
----
-
-## Configuration
-
-Key parameters can be set via the launch file or command line:
-
-### Planner Parameters
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `planning_time` | `2.0` | BIT\* solver timeout (seconds) |
-| `collision_radius` | `0.8` | Drone collision sphere radius (meters) |
-| `safety_margin` | `0.5` | Additional clearance around obstacles |
-| `samples_per_batch` | `200` | BIT\* sampling density per batch |
-| `max_attempts` | `5` | Maximum planning retries per cycle |
-| `max_waypoints` | `25` | Maximum waypoints in output path |
-
-### Exploration Parameters
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `autonomous_mode` | `true` | Enable/disable autonomous frontier exploration |
-| `exploration_timeout` | `30.0` | Timeout before dropping an unreachable goal (seconds) |
-| `min_frontier_utility` | `0.3` | Minimum utility score for a frontier to be selected |
-| `frontier_update_interval` | `2.0` | How often to request new frontiers (seconds) |
-| `visited_goal_radius` | `3.0` | Radius to mark a goal as already visited (meters) |
-
-### Workspace Bounds
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `min_x` / `max_x` | `-50.0` / `50.0` | X-axis limits (meters) |
-| `min_y` / `max_y` | `-50.0` / `50.0` | Y-axis limits (meters) |
-| `min_z` / `max_z` | `0.5` / `10.0` | Z-axis (altitude) limits (meters) |
+*(Optional)* Launch RViz2 in Terminal 9 to visualize `/octomap_full`, `/planned_path`, and `/tf`.
 
 ---
 
 ## How It Works
 
-### 1. Mapping
-The drone's 3D LiDAR produces a point cloud that is fed into an **OctoMap Server**, which maintains a probabilistic 3D occupancy grid. Each voxel is classified as free, occupied, or unknown.
+### 1. 3D Occupancy Mapping
+`octomap_server` integrates 3D point clouds from the LiDAR into a 3D OcTree grid (voxel resolution 0.15m). Voxels are updated probabilistically as **Free**, **Occupied**, or **Unknown**.
 
-### 2. Frontier Detection
-The **Frontier Extraction** node scans the OctoMap for boundary voxels between known-free and unknown space. These frontier voxels are clustered into frontier regions, each with a centroid and point count.
+### 2. Frontier Extraction & Utility Ranking
+Frontiers are clusters of free voxels bordering unmapped unknown space. The `autonomous_planner_node` requests frontiers from `frontier_extraction` via `/get_frontiers` and ranks them using a utility score:
 
-### 3. Goal Selection
-The **Autonomous Planner** evaluates each frontier using a utility function:
+$$\text{Utility} = N_i \times D_i \times (1 + \text{ratio}_{\text{unknown}})$$
 
-```
-utility = num_points × distance_to_frontier × (1 + unknown_ratio)
-```
+Where $N_i$ is the number of frontier points, $D_i$ is distance to the robot, and $\text{ratio}_{\text{unknown}}$ measures unknown volume within a 1.5m radius.
 
-- **`num_points`**: Larger frontiers are preferred (more area to explore)
-- **`distance_to_frontier`**: Farther frontiers are preferred to avoid local oscillation
-- **`unknown_ratio`**: Frontiers near more unknown space are preferred
+### 3. BIT\* Path Planning
+The **Batch Informed Trees (BIT\*)** algorithm plans collision-free trajectories:
+- **Batch Sampling**: Samples batch states within workspace bounds ($X \in [-9, 26]\text{m}$, $Y \in [-16, 17]\text{m}$, $Z \in [0.5, 5.5]\text{m}$).
+- **Informed Search & Pruning**: Constrains search inside an ellipsoid defined by current solution cost, rapidly refining paths.
+- **Safety Inflation**: Samples spherical clearance around voxels using $R_{\text{collision}} = 0.7\text{m} + \text{margin}_{\text{safety}} = 0.1\text{m}$.
 
-Goals that are too close, already visited, or in occupied space are filtered out. If no valid frontier is found, a random collision-free goal within the exploration bounds is selected.
-
-### 4. Path Planning
-The **BIT\*** (Batch Informed Trees) planner from OMPL generates an asymptotically optimal, collision-free path through the OctoMap. The planner:
-- Uses a 3D RealVectorStateSpace with configurable bounds
-- Performs inflated collision checking (collision radius + safety margin)
-- Validates the complete path post-planning
-- Retries with increased sampling density if planning fails
-
-### 5. Path Following
-The **Path Follower** node tracks the planned path waypoint-by-waypoint:
-- Converts ENU waypoints to NED setpoints for PX4
-- Publishes `OffboardControlMode` and `TrajectorySetpoint` at 20 Hz
-- Performs real-time safety checks on each path segment using the latest OctoMap
-- Skips ahead or rejects unsafe path segments
-- Holds position when no path is active
-
-### 6. Continuous Replanning
-The system runs in a continuous loop — the planner replans every 500ms with the latest odometry and map data, allowing the drone to adapt to newly discovered obstacles in real time.
+### 4. Real-time Path Following & Safety Layer
+The `path_follower` node streams `px4_msgs::msg::OffboardControlMode` and `px4_msgs::msg::TrajectorySetpoint` at 20 Hz. Before moving to the next waypoint, it performs a 15-step segment collision check against the live OctoMap, skipping or aborting unsafe paths dynamically.
 
 ---
 
-## Results
+## ROS 2 Interface & Topics
 
-The system has been tested in a Gazebo simulation environment featuring an indoor maze-like structure. Key results:
+### Subscribed Topics
+- `/fmu/out/vehicle_odometry` (`px4_msgs/msg/VehicleOdometry`) - PX4 odometry state
+- `/octomap_full` (`octomap_msgs/msg/Octomap`) - 3D volumetric map
+- `/planner_goal` (`geometry_msgs/msg/PointStamped`) - Manual target goals (when `autonomous_mode:=false`)
 
-- ✅ **Full autonomous exploration** of a multi-room indoor environment with no human intervention
-- ✅ **Real-time 3D mapping** with OctoMap at 0.15m resolution
-- ✅ **Collision-free navigation** through narrow corridors and doorways using BIT\* with safety margins
-- ✅ **Frontier-based coverage** systematically explores all reachable unknown areas
-- ✅ **Dynamic replanning** adapts to newly mapped obstacles during flight
-- ✅ **NED ↔ ENU frame handling** ensures consistent coordinate transforms between PX4 and ROS 2
+### Published Topics
+- `/planned_path` (`nav_msgs/msg/Path`) - Computed 3D waypoints
+- `/fmu/in/offboard_control_mode` (`px4_msgs/msg/OffboardControlMode`) - Offboard enable flags
+- `/fmu/in/trajectory_setpoint` (`px4_msgs/msg/TrajectorySetpoint`) - Target position setpoints
 
-### Performance Metrics (Simulation)
+---
 
-| Metric | Value |
-|--------|-------|
-| Planning frequency | ~2 Hz (500ms cycle) |
-| Path follower rate | 20 Hz |
-| OctoMap resolution | 0.15 m |
-| Collision radius | 0.8 m |
-| Goal tolerance | 0.8 m |
-| Typical planning time | 1.5–3.0 s |
+## Estimated Hardware Budget
+
+While evaluated in high-fidelity Gazebo simulation, the physical hardware Bill of Materials (BOM) for real-world deployment is estimated below:
+
+| Component | Model / Spec | Est. Cost (USD) |
+|-----------|--------------|-----------------|
+| **Airframe Kit** | X500 V2 Carbon Fiber Frame Kit | $260.00 |
+| **Propulsion** | 4x 2216 920KV Motors + 20A ESCs + 1045 Props | $148.00 |
+| **Flight Controller** | Pixhawk 6C (PX4 compatible) | $180.00 |
+| **Onboard Compute** | NVIDIA Jetson Orin Nano (ROS 2 / AI compute) | $300.00 |
+| **3D Range Sensor** | Velodyne VLP-16 Puck LiDAR | $500.00 |
+| **Telemetry & Radio** | SiK Telemetry Radio V3 + RadioMaster Receiver/Tx | $287.99 |
+| **Power & Battery** | 2x 4S 5000mAh LiPo + PDB + Charger | $137.00 |
+| **Inspection Camera** | GoPro Hero10 Black | $150.00 |
+| **Total Hardware BOM** | | **~$2,046.99** |
 
 ---
 
 ## License
 
 This project is licensed under the [Apache 2.0 License](LICENSE).
-
-The `robot_exploration` subpackages are adapted from [ADVRHumanoids/robot_exploration](https://github.com/ADVRHumanoids/robot_exploration) and retain their original license.
+Submodules in `src/robot_exploration` retain their original licenses.
