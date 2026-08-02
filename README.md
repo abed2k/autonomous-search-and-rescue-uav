@@ -1,4 +1,4 @@
-# 🚁 Autonomous Search and Rescue UAV
+# Autonomous Search and Rescue UAV
 
 An autonomous indoor UAV exploration system built on **ROS 2 Jazzy** and **PX4 Autopilot**. The quadrotor operates in GPS-denied, hazardous environments (e.g., collapsed structures, smoke-filled buildings) using 3D LiDAR perception to incrementally construct an **OctoMap**, detect 3D frontiers, and plan collision-free navigation paths using the **BIT\*** (Batch Informed Trees) algorithm via **OMPL**.
 
@@ -6,13 +6,13 @@ An autonomous indoor UAV exploration system built on **ROS 2 Jazzy** and **PX4 A
 
 ---
 
-## 👥 Team
+## Team
 
 This project was developed collaboratively by Abdul Karim (abed2k) and Hazem Abusalem (hazem-a17) under the supervision of **EMS Elektronik**.
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
 - [Team](#-team)
 - [Overview & Motivation](#overview--motivation)
@@ -267,7 +267,7 @@ While evaluated in high-fidelity Gazebo simulation, the physical hardware Bill o
 
 ---
 
-## 👏 Credits
+## Credits
 
 Special thanks and attribution to the following open-source libraries and projects:
 - **[The Open Motion Planning Library (OMPL)](https://ompl.kavrakilab.org/)**: Used for 3D state space sampling and the BIT\* path planning algorithm implementation.
@@ -279,4 +279,3 @@ Special thanks and attribution to the following open-source libraries and projec
 
 This project is licensed under the [MIT License](LICENSE).
 Submodules in `src/robot_exploration` retain their original licenses.
-
