@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<root main_tree_to_execute="ExplorationTree" BTCPP_format="4">
+    <!-- ////////// -->
+    <BehaviorTree ID="ExplorationTree">
+        <RetryUntilSuccessful num_attempts="-1">
+            <ForceFailure>
+                <Sequence>
+                    <Action ID="CheckExplorationRequest"/>
+                    <Fallback name="ImageAcquisition">
+                        <Inverter>
+                            <Condition ID="CanAcquireImage"/>
+                        </Inverter>
+                        <Action ID="AcquireImage"/>
+                    </Fallback>
+                    <Condition ID="IsRequestActive"/>
+                    <Fallback name="DefineNavTarget">
+                        <Sequence>
+                            <Condition ID="IsTaskInspection"/>
+                            <Condition ID="IsObjectPoseKnown"/>
+                            <Action ID="DefineInspectionGoals"/>
+                        </Sequence>
+                        <Action ID="CollectObjectPose"/>
+                        <Sequence name="Explore">
+                            <Action ID="CollectFrontiers"/>
+                            <Action ID="Explore"/>
+                        </Sequence>
+                    </Fallback>
+                    <Fallback name="DriveToTarget">
+                        <Action ID="CheckLocomotionStatus"/>
+                        <Action ID="SendNavPose"/>
+                    </Fallback>
+                </Sequence>
+            </ForceFailure>
+        </RetryUntilSuccessful>
+    </BehaviorTree>
+    <!-- ////////// -->
+    <TreeNodesModel>
+        <Action ID="AcquireImage"/>
+        <Condition ID="CanAcquireImage"/>
+        <Action ID="CheckExplorationRequest"/>
+        <Action ID="CheckLocomotionStatus"/>
+        <Action ID="CollectFrontiers"/>
+        <Action ID="DefineInspectionGoals"/>
+        <Action ID="CollectObjectPose"/>
+        <Action ID="Explore"/>
+        <Condition ID="IsObjectPoseKnown"/>
+        <Condition ID="IsRequestActive"/>
+        <Condition ID="IsTaskInspection"/>
+        <Action ID="SendNavPose"/>
+    </TreeNodesModel>
+    <!-- ////////// -->
+</root>

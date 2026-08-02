@@ -1,0 +1,25 @@
+# Colcon build artifacts
+build/
+install/
+log/
+
+# Extracted frames (large binary files)
+frames/
+
+# IDE settings
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+*.egg-link
+
+# ROS log files
+src/*/log/
+src/robot_exploration/log/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,27 @@
+exploration_main:
+  ros__parameters:
+    use_sim_time: True
+
+    robot_exploration:
+      world_frame: "map"
+      base_frame: "pelvis"
+
+      min_nav_target_distance: 0.20  # [m]
+
+      distance_to_object_pose: 0.60 # [m]
+      distance_target_object: 0.90 # [m]
+
+      exploration:
+        timer_frontiers: 10.0 # [Seconds]
+        min_dist_frontier_robot: 0.25 # [m]
+
+        close_frontiers_distance: 2.0 # Radius for considering close frontiers
+
+        min_distance_robot_frontier: 1.0
+
+        cost_function:
+          n_points: 5.0
+          euclidean_distance: 10.0 # Closer to the robot, the better (multiplied by the inverse of the distance)
+          rotation_distance: 50.0
+          distance_prev_target: 25.0 # Close to previous target is better, to avoid switching from one side of the map to the other one
+          close_frontiers: 5.0
