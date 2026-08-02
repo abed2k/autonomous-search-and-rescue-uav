@@ -260,5 +260,6 @@ While evaluated in high-fidelity Gazebo simulation, the physical hardware Bill o
 
 ## License
 
-This project is licensed under the [Apache 2.0 License](LICENSE).
+This project is licensed under the [MIT License](LICENSE).
 Submodules in `src/robot_exploration` retain their original licenses.
+

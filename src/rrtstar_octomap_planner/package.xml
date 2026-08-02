@@ -5,7 +5,7 @@
   <version>0.1.0</version>
   <description>RRT* planner using OctoMap for collision checking and PX4 odometry</description>
   <maintainer email="you@example.com">you</maintainer>
-  <license>Apache-2.0</license>
+  <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
