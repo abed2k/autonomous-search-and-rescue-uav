@@ -51,7 +51,7 @@ Detailed flowchart of the system.
 
 ---
 
-## Operational Environment and Assmptions
+## Operational Environment and Assumptions
 
 The autonomous UAV system is designed to operate in hazardous or inaccessible indoor
 environments. These environments are characterized by the absence of GNSS signals,
