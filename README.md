@@ -74,7 +74,7 @@ PX4 Autopilot operates natively in the **NED** (North-East-Down) coordinate fram
 
 The `drone_tf_publisher` node continuously handles rigid-body frame transformations:
 - **Position**: $X_{\text{ENU}} = Y_{\text{NED}}$, $Y_{\text{ENU}} = X_{\text{NED}}$, $Z_{\text{ENU}} = -Z_{\text{NED}}$
-- **Orientation**: Quaternion $[w, x, y, z]_{\text{ENU}} = [q_0, q_1, -q_2, -q_3]_{\text{NED}}$
+- **Orientation**: $w_{\text{ENU}} = q_0$, $x_{\text{ENU}} = q_1$, $y_{\text{ENU}} = -q_2$, $z_{\text{ENU}} = -q_3$
 - **TF Tree**: Broadcasts dynamic transform from `map` (parent) to `base_link` (child) and static transform from `base_link` to `lidar_3d`.
 
 ---
