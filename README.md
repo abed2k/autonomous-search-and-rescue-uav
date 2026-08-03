@@ -8,7 +8,7 @@ An autonomous indoor UAV exploration system built on **ROS 2 Jazzy** and **PX4 A
 
 ## Team
 
-This project was developed collaboratively by Abdul Karim (abed2k) and Hazem Abusalem (hazem-a17) under the supervision of **EMS Elektronik**.
+This project was developed collaboratively by **[Abdul Karim](https://github.com/abed2k)** and **[Hazem Abusalem](https://github.com/hazem-a17)** under the supervision of **[EMS Elektronik ve Medikal Sistemler A.Ş. (EMS)](https://www.emselektronik.com/ana-sayfa/)**.
 
 ---
 
@@ -114,19 +114,55 @@ The `drone_tf_publisher` node continuously handles rigid-body frame transformati
 ## Installation & Build
 
 ```bash
-# 1. Install ROS 2 dependencies & OMPL
+# 1. Install ROS 2 dependencies
 sudo apt update && sudo apt install -y \
-  ros-jazzy-octomap ros-jazzy-octomap-msgs ros-jazzy-octomap-server \
-  ros-jazzy-tf2-ros ros-jazzy-nav-msgs ros-jazzy-geometry-msgs \
-  ros-jazzy-sensor-msgs ros-jazzy-visualization-msgs \
-  libompl-dev liboctomap-dev
+  ros-jazzy-tf2-ros \
+  ros-jazzy-nav-msgs \
+  ros-jazzy-geometry-msgs \
+  ros-jazzy-sensor-msgs \
+  ros-jazzy-visualization-msgs
 
-# 2. Build the workspace
+# 2. Install Gazebo Harmonic
+sudo apt install -y \
+  ros-jazzy-ros-gz \
+  ros-jazzy-ros-gz-bridge
+
+# 3. Clone PX4 Autopilot
+cd ~
+git clone https://github.com/PX4/PX4-Autopilot.git --recursive
+
+# 4. Install PX4 dependencies
+bash ~/PX4-Autopilot/Tools/setup/ubuntu.sh
+
+# 5. Replace the PX4 x500 model
+cp https://github.com/abed2k/autonomous-search-and-rescue-uav/blob/main/model.sdf \
+~/PX4-Autopilot/Tools/simulation/gz/models/x500/model.sdf
+
+# 6. Install Micro XRCE-DDS Agent
+sudo apt install -y ros-jazzy-microxrce-dds-agent
+
+# 7. Install OctoMap
+sudo apt install -y \
+  ros-jazzy-octomap \
+  ros-jazzy-octomap-msgs \
+  ros-jazzy-octomap-server \
+  liboctomap-dev
+
+# 8. Install OMPL
+sudo apt install -y libompl-dev
+
+# 9. Build PX4 for Gazebo
+cd ~/PX4-Autopilot
+make px4_sitl
+
+# 10. Build the workspace
 cd ~/autonomous-search-and-rescue-uav
 source /opt/ros/jazzy/setup.bash
 colcon build --symlink-install
 source install/setup.bash
 ```
+
+> **Note:** The `model.sdf` provided in this repository includes a **3D Velodyne LiDAR** integrated into the default PX4 **x500** model. Replacing the original `model.sdf` is required for 3D-LiDAR-based mapping, frontier exploration, and autonomous navigation.
 
 ---
 
