@@ -266,7 +266,7 @@ While evaluated in high-fidelity Gazebo simulation, the physical hardware Bill o
 Special thanks and attribution to the following open-source libraries and projects:
 - **[EMS Elektronik ve Medikal Sistemler A.Ş. (EMS)](https://www.emselektronik.com/ana-sayfa/)**: For giving us the opportunity to develop this project under their supervision. Their guidance and support throughout the project were invaluable and contributed significantly to its successful completion.
 - **[The Open Motion Planning Library (OMPL)](https://ompl.kavrakilab.org/)**: Used for 3D state space sampling and the BIT\* path planning algorithm implementation.
-- **[robot_exploration](https://github.com/ADVRHumanoids/robot_exploration)**: Adapted for 3D frontier extraction and exploration management logic.
+- **[ADVR Humanoids](https://github.com/ADVRHumanoids/robot_exploration)**: Adapted their robot_exploration repository for 3D frontier extraction and exploration management logic.
 
 ---
 
